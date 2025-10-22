@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Solution Files</title>
+    <style>
+        body { font-family: monospace; white-space: pre-wrap; margin: 0; padding: 1em; }
+        h1 { font-size: 1.2em; margin-bottom: 0.5em; }
+        pre { background-color: #f0f0f0; padding: 1em; border: 1px solid #ccc; overflow-x: auto; margin-bottom: 1em; }
+        .file-section { margin-bottom: 2em; }
+    </style>
+</head>
+<body>
+
+    <div class="file-section">
+        <h1>execute.py</h1>
+        <pre id="execute-py-content">import json
+
+import pandas as pd
+
+
+def main():
+    df = pd.read_csv("data.csv")
+    df["revenue"] = df["units"] * df["price"]
+    row_count = len(df)
+    regions_count = df["region"].nunique()
+    n = 3
+    top_products = (
+        df.groupby("product")["revenue"]
+        .sum()
+        .sort_values(ascending=False)
+        .head(n)
+        .reset_index()
+    )
+    top_products_list = [
+        {"product": row["product"], "revenue": float(row["revenue"])}
+        for _, row in top_products.iterrows()
+    ]
+    df["date"] = pd.to_datetime(df["date"])
+    daily_rev = (
+        df.groupby(["region", "date"])["revenue"]
+        .sum()
+        .reset_index()
+        .sort_values(["region", "date"])
+    )
+    rolling = (
+        daily_rev.groupby("region")
+        .apply(lambda g: g.set_index("date")["revenue"].rolling("7D").mean(), include_groups=False)
+        .reset_index(name="rolling_7d_revenue")
+    )
+    last_rolling = (
+        rolling.sort_values(["region", "date"])
+        .groupby("region")
+        .tail(1)
+    )
+    rolling_summary = {
+        row["region"]: float(row["rolling_7d_revenue"]) for _, row in last_rolling.iterrows()
+    }
+    result = {
+        "row_count": int(row_count),
+        "regions": int(regions_count),
+        "top_n_products_by_revenue": top_products_list,
+        "rolling_7d_revenue_by_region": rolling_summary,
+    }
+    print(json.dumps(result, indent=2))
+
+
+if __name__ == "__main__":
+    main()</pre>
+    </div>
+
+    <div class="file-section">
+        <h1>data.csv</h1>
+        <pre id="data-csv-content">date,region,product,units,price
+2023-01-01,East,A,10,100
+2023-01-01,West,B,5,200
+2023-01-02,East,A,12,100
+2023-01-02,West,C,8,150
+2023-01-03,East,B,7,200
+2023-01-03,West,A,15,100
+2023-01-04,East,C,9,150
+2023-01-04,West,B,6,200
+2023-01-05,East,A,11,100
+2023-01-05,West,C,10,150
+2023-01-06,East,B,8,200
+2023-01-06,West,A,13,100
+2023-01-07,East,C,6,150
+2023-01-07,West,B,7,200
+2023-01-08,East,A,14,100
+2023-01-08,West,C,9,150</pre>
+    </div>
+
+    <div class="file-section">
+        <h1>.github/workflows/ci.yml</h1>
+        <pre id="ci-yml-content">name: CI and Publish Result
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build_and_publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pandas==2.3 ruff
+
+      - name: Run Ruff checks
+        run: ruff check .
+
+      - name: Execute script and generate result.json
+        run: |
+          mkdir -p _site
+          python execute.py &gt; _site/result.json
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload GitHub Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4</pre>
+    </div>
+
+    <div class="file-section">
+        <h1>result.json</h1>
+        <pre id="result-json-status">result.json is not committed. It will be generated and published via GitHub Pages by the CI workflow.</pre>
+    </div>
+
+</body>
+</html>
